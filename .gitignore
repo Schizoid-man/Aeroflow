@@ -20,7 +20,7 @@ Thumbs.db
 
 # Generated runtime artifacts
 logs/
-reports/
+
 datasets/*.db
 forecasting/model/
 
