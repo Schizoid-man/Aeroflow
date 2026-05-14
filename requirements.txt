@@ -1,0 +1,13 @@
+
+pandas 
+numpy
+requests==2.31.0
+SQLAlchemy>=1.4.28 
+psycopg2-binary
+scikit-learn
+joblib==1.4.2
+matplotlib   
+pytest==7.4.0
+pytest-cov==4.1.0
+flake8==6.1.0
+python-dotenv==1.0.0

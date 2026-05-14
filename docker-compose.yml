@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow_aqi
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+  image: aeropulse-airflow:local
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_aqi
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      PYTHONPATH: /opt/airflow
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: airflow
+      DB_PASSWORD: airflow
+      DB_NAME: airflow_aqi
+    volumes:
+      - ./orchestration:/opt/airflow/dags
+      - ./pipeline:/opt/airflow/pipeline
+      - ./forecasting:/opt/airflow/forecasting
+      - ./settings:/opt/airflow/settings
+      - ./schema:/opt/airflow/schema
+      - ./setup:/opt/airflow/setup
+      - ./datasets:/opt/airflow/datasets
+      - ./logs:/opt/airflow/logs
+      - ./reports:/opt/airflow/reports
+    ports:
+      - '8080:8080'
+    command: webserver
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+  image: aeropulse-airflow:local
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_aqi
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      PYTHONPATH: /opt/airflow
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: airflow
+      DB_PASSWORD: airflow
+      DB_NAME: airflow_aqi
+    volumes:
+      - ./orchestration:/opt/airflow/dags
+      - ./pipeline:/opt/airflow/pipeline
+      - ./forecasting:/opt/airflow/forecasting
+      - ./settings:/opt/airflow/settings
+      - ./schema:/opt/airflow/schema
+      - ./setup:/opt/airflow/setup
+      - ./datasets:/opt/airflow/datasets
+      - ./logs:/opt/airflow/logs
+      - ./reports:/opt/airflow/reports
+    command: scheduler
+
+volumes:
+  postgres-db-volume:

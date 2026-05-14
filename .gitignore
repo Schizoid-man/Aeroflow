@@ -1,0 +1,28 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+*.env
+
+# Generated runtime artifacts
+logs/
+reports/
+datasets/*.db
+forecasting/model/
+
+AeroPulse_Report_Final (1).docx
+.coverage
