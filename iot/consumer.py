@@ -23,9 +23,9 @@ SUBSCRIBE_TOPIC: str = "building/zone/+/data"
 
 DB_HOST: str = os.getenv("DB_HOST", "localhost")
 DB_PORT: int = int(os.getenv("DB_PORT", "5432"))
-DB_USER: str = os.getenv("DB_USER", "airflow")
-DB_PASSWORD: str = os.getenv("DB_PASSWORD", "airflow")
-DB_NAME: str = os.getenv("DB_NAME", "airflow_iot")
+DB_USER: str = os.getenv("DB_USER", "iot")
+DB_PASSWORD: str = os.getenv("DB_PASSWORD", "iot")
+DB_NAME: str = os.getenv("DB_NAME", "iot_data")
 
 INSERT_SQL = """
 INSERT INTO raw_sensor_buffer

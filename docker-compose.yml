@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow_iot
+      POSTGRES_USER: iot
+      POSTGRES_PASSWORD: iot
+      POSTGRES_DB: iot_data
     ports:
       - '5432:5432'
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
+      test: ["CMD", "pg_isready", "-U", "iot", "-d", "iot_data"]
       interval: 5s
       retries: 10
 
@@ -53,12 +53,12 @@ services:
       MQTT_BROKER_PORT: '1883'
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_USER: airflow
-      DB_PASSWORD: airflow
-      DB_NAME: airflow_iot
+      DB_USER: iot
+      DB_PASSWORD: iot
+      DB_NAME: iot_data
     restart: unless-stopped
 
-  airflow-webserver:
+  airflow-init:
     build:
       context: .
       dockerfile: Dockerfile.airflow
@@ -68,17 +68,46 @@ services:
         condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_iot
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://iot:iot@postgres:5432/iot_data
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       PYTHONPATH: /opt/airflow
-      MQTT_BROKER_HOST: mosquitto
-      MQTT_BROKER_PORT: '1883'
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create
+          --username admin
+          --password admin
+          --firstname Admin
+          --lastname User
+          --role Admin
+          --email admin@example.com || true
+      "
+    restart: "no"
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: aeroflow-airflow:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://iot:iot@postgres:5432/iot_data
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      PYTHONPATH: /opt/airflow
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_USER: airflow
-      DB_PASSWORD: airflow
-      DB_NAME: airflow_iot
+      DB_USER: iot
+      DB_PASSWORD: iot
+      DB_NAME: iot_data
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: '1883'
     volumes:
       - ./orchestration:/opt/airflow/dags
       - ./pipeline:/opt/airflow/pipeline
@@ -91,6 +120,7 @@ services:
     ports:
       - '8080:8080'
     command: webserver
+    restart: unless-stopped
 
   airflow-scheduler:
     build:
@@ -100,19 +130,21 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_iot
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://iot:iot@postgres:5432/iot_data
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       PYTHONPATH: /opt/airflow
-      MQTT_BROKER_HOST: mosquitto
-      MQTT_BROKER_PORT: '1883'
       DB_HOST: postgres
       DB_PORT: '5432'
-      DB_USER: airflow
-      DB_PASSWORD: airflow
-      DB_NAME: airflow_iot
+      DB_USER: iot
+      DB_PASSWORD: iot
+      DB_NAME: iot_data
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: '1883'
     volumes:
       - ./orchestration:/opt/airflow/dags
       - ./pipeline:/opt/airflow/pipeline
@@ -123,6 +155,7 @@ services:
       - ./logs:/opt/airflow/logs
       - ./reports:/opt/airflow/reports
     command: scheduler
+    restart: unless-stopped
 
 volumes:
   postgres-db-volume:
