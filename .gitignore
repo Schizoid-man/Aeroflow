@@ -22,6 +22,10 @@ Thumbs.db
 logs/
 
 datasets/*.db
+datasets/ci_extracted.csv
+datasets/ci_transformed.csv
+datasets/extracted_buffer.csv
+datasets/transformed_output.csv
 forecasting/model/
 
 AeroPulse_Report_Final (1).docx
