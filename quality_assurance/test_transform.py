@@ -3,87 +3,67 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from pipeline.transform import run_transformation
 
 
-def test_nulls_removed():
-    df = pd.DataFrame(
-        [
-            {"date": "2025-01-01", "city": "X", "pm2_5": 10, "aqi": 20},
-            {"date": "2025-01-02", "city": "X", "pm2_5": None, "aqi": 30},
-            {"date": "2025-01-03", "city": "X", "pm2_5": 12, "aqi": None},
-        ]
-    )
-    df["pm10"] = 1
-    df["no2"] = 1
-    df["so2"] = 1
-    df["co"] = 1
-    df["o3"] = 1
+def _make_df(rows):
+    return pd.DataFrame(rows)
+
+
+def _base_row(overrides=None):
+    row = {
+        "zone_id": "floor_1",
+        "zone_name": "Floor 1",
+        "temperature": 22.0,
+        "humidity": 48.0,
+        "co2": 600,
+        "occupancy": 10,
+        "energy_kw": 7.0,
+        "published_at": "2025-01-01T10:00:00Z",
+    }
+    if overrides:
+        row.update(overrides)
+    return row
+
+
+def test_nulls_in_energy_removed():
+    df = _make_df([
+        _base_row(),
+        _base_row({"energy_kw": None, "published_at": "2025-01-01T11:00:00Z"}),
+    ])
+    out = run_transformation(df)
+    assert len(out) == 1
+    assert out.iloc[0]["zone_id"] == "floor_1"
+
+
+def test_out_of_range_temperature_removed():
+    df = _make_df([
+        _base_row(),
+        _base_row({"temperature": 999.0, "published_at": "2025-01-01T11:00:00Z"}),
+    ])
     out = run_transformation(df)
     assert len(out) == 1
 
 
-def test_aqi_categories_correct():
-    df = pd.DataFrame(
-        [
-            {
-                "date": "2025-01-01 00:00:00",
-                "city": "X",
-                "pm2_5": 10,
-                "pm10": 10,
-                "no2": 10,
-                "so2": 10,
-                "co": 1,
-                "o3": 10,
-                "aqi": 45,
-            },
-            {
-                "date": "2025-01-02 00:00:00",
-                "city": "X",
-                "pm2_5": 15,
-                "pm10": 12,
-                "no2": 11,
-                "so2": 9,
-                "co": 1.1,
-                "o3": 12,
-                "aqi": 350,
-            },
-        ]
-    )
+def test_business_hours_flag():
+    df = _make_df([
+        _base_row({"published_at": "2025-01-06T10:00:00Z"}),  # Mon 10am → business
+        _base_row({"published_at": "2025-01-06T22:00:00Z"}),  # Mon 10pm → not business
+    ])
     out = run_transformation(df)
-    cats = list(out["aqi_category"].values)
-    assert "Good" in cats
-    assert "Hazardous" in cats
+    flags = list(out.sort_values("published_at")["is_business_hours"])
+    assert flags[0] is True
+    assert flags[1] is False
 
 
 def test_normalized_values_in_range():
-    df = pd.DataFrame(
-        [
-            {
-                "date": "2025-01-01",
-                "city": "X",
-                "pm2_5": 10,
-                "pm10": 20,
-                "no2": 5,
-                "so2": 2,
-                "co": 0.5,
-                "o3": 8,
-                "aqi": 50,
-            },
-            {
-                "date": "2025-01-02",
-                "city": "X",
-                "pm2_5": 20,
-                "pm10": 40,
-                "no2": 15,
-                "so2": 4,
-                "co": 1.0,
-                "o3": 18,
-                "aqi": 120,
-            },
-        ]
-    )
+    df = _make_df([
+        _base_row({"temperature": 20.0, "humidity": 40.0, "co2": 500}),
+        _base_row({"temperature": 26.0, "humidity": 60.0, "co2": 900,
+                   "published_at": "2025-01-01T11:00:00Z"}),
+    ])
     out = run_transformation(df)
     norm_cols = [c for c in out.columns if c.endswith("_norm")]
     assert norm_cols
@@ -91,23 +71,23 @@ def test_normalized_values_in_range():
     assert (out[norm_cols] <= 1).all().all()
 
 
-def test_rolling_avg_computed():
-    rows = []
-    for i in range(10):
-        rows.append(
-            {
-                "date": f"2025-01-{i + 1:02d}",
-                "city": "X",
-                "pm2_5": 10 + i,
-                "pm10": 20,
-                "no2": 5,
-                "so2": 2,
-                "co": 0.5,
-                "o3": 8,
-                "aqi": 60,
-            }
-        )
-    df = pd.DataFrame(rows)
+def test_rolling_avg_energy_computed():
+    rows = [
+        _base_row({
+            "energy_kw": 5.0 + i,
+            "published_at": f"2025-01-{i + 1:02d}T10:00:00Z",
+        })
+        for i in range(10)
+    ]
+    out = run_transformation(_make_df(rows))
+    assert "rolling_avg_energy_7d" in out.columns
+    assert out["rolling_avg_energy_7d"].notna().all()
+
+
+def test_time_features_added():
+    df = _make_df([_base_row({"published_at": "2025-01-06T14:30:00Z"})])
     out = run_transformation(df)
-    assert "rolling_avg_pm25_7d" in out.columns
-    assert out.loc[7:, "rolling_avg_pm25_7d"].isna().sum() == 0
+    assert "hour_of_day" in out.columns
+    assert "day_of_week" in out.columns
+    assert int(out.iloc[0]["hour_of_day"]) == 14
+    assert int(out.iloc[0]["day_of_week"]) == 0  # Monday

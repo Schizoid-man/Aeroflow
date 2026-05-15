@@ -1,0 +1,11 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir paho-mqtt psycopg2-binary python-dotenv
+
+COPY iot/ ./iot/
+COPY settings/ ./settings/
+
+CMD ["python", "-m", "iot.publisher"]

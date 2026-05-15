@@ -1,4 +1,4 @@
-name: Air Quality ML Pipeline CI/CD
+name: Smart Building IoT Pipeline CI/CD
 
 on:
   push:
@@ -17,37 +17,33 @@ jobs:
     name: Lint and Test
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the repository code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Step 2: Install Python
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Airflow is run via Docker Compose, not needed for CI unit tests.
-          python -c "from pathlib import Path; p=Path('requirements.txt'); lines=p.read_text(encoding='utf-8').splitlines(); kept=[ln for ln in lines if not ln.lstrip().startswith('apache-airflow==')]; Path('requirements-ci.txt').write_text('\n'.join(kept)+'\n', encoding='utf-8')"
-          echo "--- requirements-ci.txt ---"
-          cat requirements-ci.txt
+          python -c "
+          from pathlib import Path
+          lines = Path('requirements.txt').read_text().splitlines()
+          kept = [l for l in lines if not l.lstrip().startswith('apache-airflow==')]
+          Path('requirements-ci.txt').write_text('\n'.join(kept) + '\n')
+          "
           pip install -r requirements-ci.txt
 
-      # Step 4: Run flake8 linting on core pipeline modules
       - name: Lint (flake8)
         run: |
-          flake8 pipeline forecasting
+          flake8 pipeline forecasting iot
 
-      # Step 5: Run pytest with coverage
       - name: Test (pytest + coverage)
         run: |
           pytest -q --cov=pipeline --cov=forecasting --cov-report=xml
 
-      # Step 6: Upload coverage report for academic documentation
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
@@ -70,21 +66,33 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -c "from pathlib import Path; p=Path('requirements.txt'); lines=p.read_text(encoding='utf-8').splitlines(); kept=[ln for ln in lines if not ln.lstrip().startswith('apache-airflow==')]; Path('requirements-ci.txt').write_text('\n'.join(kept)+'\n', encoding='utf-8')"
-          echo "--- requirements-ci.txt ---"
-          cat requirements-ci.txt
+          python -c "
+          from pathlib import Path
+          lines = Path('requirements.txt').read_text().splitlines()
+          kept = [l for l in lines if not l.lstrip().startswith('apache-airflow==')]
+          Path('requirements-ci.txt').write_text('\n'.join(kept) + '\n')
+          "
           pip install -r requirements-ci.txt
 
-      # Dry-run extraction: mock API calls by skipping OpenAQ network fetches.
-      - name: Validate extraction (dry-run)
+      - name: Validate extraction (CSV fallback)
         run: |
-          python pipeline/extract.py --dry-run --out datasets/ci_extracted.csv
+          python pipeline/extract.py --csv-fallback --out datasets/ci_extracted.csv
 
-      # Transform on sample data and validate output columns.
       - name: Validate transformation
         run: |
-          python pipeline/transform.py --input datasets/sample_aqi_india.csv --output datasets/ci_transformed.csv
-          python -c "import pandas as pd; df=pd.read_csv('datasets/ci_transformed.csv'); expected={'aqi','city','date','aqi_category','hour_of_day','day_of_week','rolling_avg_pm25_7d','pm2_5_norm'}; missing=expected-set(df.columns); assert not missing, f'Missing columns: {sorted(missing)}'; assert len(df)>0"
+          python pipeline/transform.py \
+            --input datasets/sample_building_sensors.csv \
+            --output datasets/ci_transformed.csv
+          python -c "
+          import pandas as pd
+          df = pd.read_csv('datasets/ci_transformed.csv')
+          expected = {'zone_id', 'energy_kw', 'hour_of_day', 'day_of_week',
+                      'is_business_hours', 'rolling_avg_energy_7d', 'temperature_norm'}
+          missing = expected - set(df.columns)
+          assert not missing, f'Missing columns: {sorted(missing)}'
+          assert len(df) > 0, 'Output is empty'
+          print(f'Validation passed: {len(df)} rows, {len(df.columns)} columns')
+          "
 
   deploy_etl:
     name: Deploy ETL (Simulated)
@@ -94,9 +102,4 @@ jobs:
     steps:
       - name: Simulate deployment
         run: |
-          echo "ETL scripts validated and deployed"
-
-      # In a real deployment, this job could:
-      # 1) Trigger Airflow DAG via Airflow REST API (POST /api/v1/dags/<dag_id>/dagRuns)
-      # 2) Or copy updated orchestration/pipeline/forecasting code to a remote Airflow server via SSH/SCP
-      # 3) Or build and push a Docker image containing the updated pipeline.
+          echo "IoT pipeline scripts validated and deployed"

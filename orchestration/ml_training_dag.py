@@ -27,10 +27,9 @@ def _get_logger() -> logging.Logger:
     logger = logging.getLogger(LOGGER_NAME)
     if not logger.handlers:
         handler = logging.StreamHandler()
-        fmt = logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
         )
-        handler.setFormatter(fmt)
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
     return logger
@@ -45,21 +44,17 @@ def load_data_from_db(**context: Any) -> None:
 
 def preprocess_features(**context: Any) -> None:
     logger = _get_logger()
-    payload = context["ti"].xcom_pull(
-        key="processed_df_json", task_ids="load_data_from_db"
-    )
+    payload = context["ti"].xcom_pull(key="processed_df_json", task_ids="load_data_from_db")
     df = pd.read_json(payload, orient="records")
     X, y = train.build_features_and_target(df)
     context["ti"].xcom_push(key="X_json", value=X.to_json(orient="records"))
     context["ti"].xcom_push(key="y_json", value=y.to_json(orient="records"))
-    logger.info("Prepared feature matrix")
+    logger.info("Prepared feature matrix shape=%s", X.shape)
 
 
 def train_model(**context: Any) -> Dict[str, Any]:
     logger = _get_logger()
-    payload = context["ti"].xcom_pull(
-        key="processed_df_json", task_ids="load_data_from_db"
-    )
+    payload = context["ti"].xcom_pull(key="processed_df_json", task_ids="load_data_from_db")
     df = pd.read_json(payload, orient="records")
     model_path = train.train_and_save_model(df)
     context["ti"].xcom_push(key="model_path", value=str(model_path))
@@ -86,14 +81,10 @@ with DAG(
     schedule_interval="@weekly",
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=["ml", "air-quality"],
+    tags=["ml", "iot", "smart-building"],
 ) as dag:
-    t_load = PythonOperator(
-        task_id="load_data_from_db", python_callable=load_data_from_db
-    )
-    t_prep = PythonOperator(
-        task_id="preprocess_features", python_callable=preprocess_features
-    )
+    t_load = PythonOperator(task_id="load_data_from_db", python_callable=load_data_from_db)
+    t_prep = PythonOperator(task_id="preprocess_features", python_callable=preprocess_features)
     t_train = PythonOperator(task_id="train_model", python_callable=train_model)
     t_eval = PythonOperator(task_id="evaluate_model", python_callable=evaluate_model)
     t_save = PythonOperator(task_id="save_model", python_callable=save_model)

@@ -1,7 +1,6 @@
-"""Database configuration utilities.
+"""Database and MQTT configuration utilities.
 
 All credentials are loaded from environment variables (optionally via a .env file).
-This module centralizes database connection handling for ETL and ML scripts.
 """
 
 from __future__ import annotations
@@ -19,11 +18,12 @@ ENV_DB_USER: str = "DB_USER"
 ENV_DB_PASSWORD: str = "DB_PASSWORD"
 ENV_DB_NAME: str = "DB_NAME"
 
+ENV_MQTT_BROKER_HOST: str = "MQTT_BROKER_HOST"
+ENV_MQTT_BROKER_PORT: str = "MQTT_BROKER_PORT"
+
 
 @dataclass(frozen=True)
 class DBConfig:
-    """Typed database configuration."""
-
     host: str
     port: int
     user: str
@@ -31,33 +31,27 @@ class DBConfig:
     dbname: str
 
 
-def load_environment() -> None:
-    """Load environment variables from a local .env file if present."""
+@dataclass(frozen=True)
+class MQTTConfig:
+    broker_host: str
+    broker_port: int
 
+
+def load_environment() -> None:
     load_dotenv(override=False)
 
 
 def get_db_config() -> DBConfig:
     """Read DB configuration from environment variables.
 
-    Returns:
-        DBConfig: Database connection parameters.
-
     Raises:
         ValueError: If required environment variables are missing.
     """
 
     load_environment()
-
     missing = [
         name
-        for name in [
-            ENV_DB_HOST,
-            ENV_DB_PORT,
-            ENV_DB_USER,
-            ENV_DB_PASSWORD,
-            ENV_DB_NAME,
-        ]
+        for name in [ENV_DB_HOST, ENV_DB_PORT, ENV_DB_USER, ENV_DB_PASSWORD, ENV_DB_NAME]
         if not os.getenv(name)
     ]
     if missing:
@@ -66,7 +60,6 @@ def get_db_config() -> DBConfig:
             + ", ".join(missing)
             + ". Create a .env file or export them in your shell."
         )
-
     return DBConfig(
         host=str(os.environ[ENV_DB_HOST]),
         port=int(os.environ[ENV_DB_PORT]),
@@ -76,16 +69,15 @@ def get_db_config() -> DBConfig:
     )
 
 
+def get_mqtt_config() -> MQTTConfig:
+    load_environment()
+    return MQTTConfig(
+        broker_host=os.getenv(ENV_MQTT_BROKER_HOST, "localhost"),
+        broker_port=int(os.getenv(ENV_MQTT_BROKER_PORT, "1883")),
+    )
+
+
 def to_sqlalchemy_url(cfg: DBConfig) -> str:
-    """Build a SQLAlchemy PostgreSQL connection URL.
-
-    Args:
-        cfg: Database configuration.
-
-    Returns:
-        A SQLAlchemy URL string.
-    """
-
     return (
         f"postgresql+psycopg2://{cfg.user}:{cfg.password}"
         f"@{cfg.host}:{cfg.port}/{cfg.dbname}"
@@ -93,8 +85,6 @@ def to_sqlalchemy_url(cfg: DBConfig) -> str:
 
 
 def as_dict(cfg: DBConfig) -> Dict[str, str]:
-    """Convert config to a dict for libraries that expect kwargs."""
-
     return {
         "host": cfg.host,
         "port": str(cfg.port),

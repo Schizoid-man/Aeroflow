@@ -4,38 +4,87 @@ services:
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow_aqi
+      POSTGRES_DB: airflow_iot
     ports:
       - '5432:5432'
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - '1883:1883'
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "healthcheck", "-m", "ping", "-q", "0"]
+      interval: 5s
+      retries: 10
+
+  iot-publisher:
+    build:
+      context: .
+      dockerfile: Dockerfile.iot
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: '1883'
+      PUBLISH_INTERVAL_SEC: '30'
+    restart: unless-stopped
+
+  mqtt-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.iot
+    command: ["python", "-m", "iot.consumer"]
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: '1883'
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: airflow
+      DB_PASSWORD: airflow
+      DB_NAME: airflow_iot
+    restart: unless-stopped
 
   airflow-webserver:
     build:
       context: .
       dockerfile: Dockerfile.airflow
-  image: aeropulse-airflow:local
+    image: aeroflow-airflow:local
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_aqi
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_iot
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       PYTHONPATH: /opt/airflow
-      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: '1883'
       DB_HOST: postgres
       DB_PORT: '5432'
       DB_USER: airflow
       DB_PASSWORD: airflow
-      DB_NAME: airflow_aqi
+      DB_NAME: airflow_iot
     volumes:
       - ./orchestration:/opt/airflow/dags
       - ./pipeline:/opt/airflow/pipeline
       - ./forecasting:/opt/airflow/forecasting
       - ./settings:/opt/airflow/settings
       - ./schema:/opt/airflow/schema
-      - ./setup:/opt/airflow/setup
       - ./datasets:/opt/airflow/datasets
       - ./logs:/opt/airflow/logs
       - ./reports:/opt/airflow/reports
@@ -47,28 +96,29 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.airflow
-  image: aeropulse-airflow:local
+    image: aeroflow-airflow:local
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_aqi
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow_iot
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       PYTHONPATH: /opt/airflow
-      OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: '1883'
       DB_HOST: postgres
       DB_PORT: '5432'
       DB_USER: airflow
       DB_PASSWORD: airflow
-      DB_NAME: airflow_aqi
+      DB_NAME: airflow_iot
     volumes:
       - ./orchestration:/opt/airflow/dags
       - ./pipeline:/opt/airflow/pipeline
       - ./forecasting:/opt/airflow/forecasting
       - ./settings:/opt/airflow/settings
       - ./schema:/opt/airflow/schema
-      - ./setup:/opt/airflow/setup
       - ./datasets:/opt/airflow/datasets
       - ./logs:/opt/airflow/logs
       - ./reports:/opt/airflow/reports

@@ -1,12 +1,12 @@
-
-pandas 
+pandas
 numpy
 requests==2.31.0
-SQLAlchemy>=1.4.28 
+SQLAlchemy>=1.4.28
 psycopg2-binary
 scikit-learn
 joblib==1.4.2
-matplotlib   
+matplotlib
+paho-mqtt>=1.6.1
 pytest==7.4.0
 pytest-cov==4.1.0
 flake8==6.1.0

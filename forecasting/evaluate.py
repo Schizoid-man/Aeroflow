@@ -1,4 +1,4 @@
-"""Evaluate a saved regression model and log metrics.
+"""Evaluate the saved energy regression model and log metrics.
 
 Outputs:
 - logs/model_metrics.txt
@@ -15,19 +15,10 @@ import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (
-    mean_absolute_error,
-    mean_squared_error,
-    r2_score,
-)
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
-from forecasting.train import (
-    FEATURE_COLS,
-    RANDOM_STATE,
-    TARGET_COL,
-    load_processed_data,
-)
+from forecasting.train import FEATURE_COLS, RANDOM_STATE, TARGET_COL, load_processed_data
 
 
 LOGGER_NAME: str = "forecasting.evaluate"
@@ -40,15 +31,12 @@ PLOT_PATH: Path = OUT_DIR / "actual_vs_predicted.png"
 
 
 def _get_logger() -> logging.Logger:
-    """Create or return the module logger."""
-
     logger = logging.getLogger(LOGGER_NAME)
     if not logger.handlers:
         handler = logging.StreamHandler()
-        fmt = logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
         )
-        handler.setFormatter(fmt)
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
     return logger
@@ -57,16 +45,13 @@ def _get_logger() -> logging.Logger:
 def _train_test_split(
     df: pd.DataFrame,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Create a deterministic train/test split used for evaluation."""
-
     X = df[FEATURE_COLS].copy()
+    X["is_business_hours"] = X["is_business_hours"].astype(int)
     y = df[TARGET_COL].astype(float)
     return train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE)
 
 
 def evaluate_saved_model(*, model_path: str) -> Dict[str, float]:
-    """Load a saved model and evaluate against a deterministic test split."""
-
     logger = _get_logger()
     df = load_processed_data()
     _, X_test, _, y_test = _train_test_split(df)
@@ -90,13 +75,13 @@ def evaluate_saved_model(*, model_path: str) -> Dict[str, float]:
         table = pd.DataFrame(
             {"feature": FEATURE_COLS, "importance": importances}
         ).sort_values("importance", ascending=False)
-        logger.info("Feature importance:\n%s", table.to_string(index=False))
+        logger.info("Feature importances:\n%s", table.to_string(index=False))
 
     plt.figure(figsize=(8, 6))
     plt.scatter(y_test, y_pred, alpha=0.6)
-    plt.xlabel("Actual AQI")
-    plt.ylabel("Predicted AQI")
-    plt.title("Actual vs Predicted AQI")
+    plt.xlabel("Actual Energy (kW)")
+    plt.ylabel("Predicted Energy (kW)")
+    plt.title("Actual vs Predicted HVAC Energy Consumption")
     lims = [
         float(min(y_test.min(), y_pred.min())),
         float(max(y_test.max(), y_pred.max())),
@@ -111,8 +96,6 @@ def evaluate_saved_model(*, model_path: str) -> Dict[str, float]:
 
 
 def main() -> int:
-    """CLI entrypoint."""
-
     from forecasting.train import MODEL_PATH
 
     evaluate_saved_model(model_path=str(MODEL_PATH))

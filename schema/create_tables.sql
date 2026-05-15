@@ -1,76 +1,46 @@
 /*
-SCHEMA DIAGRAM (PostgreSQL)
+SCHEMA: Smart Building IoT Pipeline (PostgreSQL)
 
-raw_air_quality
-  - id SERIAL PRIMARY KEY
-  - location TEXT
-  - city TEXT
-  - country TEXT
-  - parameter TEXT
-  - value FLOAT
-  - unit TEXT
-  - date_utc TIMESTAMP
-  - latitude FLOAT
-  - longitude FLOAT
-  - source TEXT
-  - ingested_at TIMESTAMP DEFAULT NOW()
+raw_sensor_buffer
+  - Continuously populated by mqtt-consumer
+  - Cleared by Airflow ETL after each successful load
 
-processed_air_quality
-  - id SERIAL PRIMARY KEY
-  - date TIMESTAMP
-  - city TEXT
-  - pm2_5 FLOAT
-  - pm10 FLOAT
-  - no2 FLOAT
-  - so2 FLOAT
-  - co FLOAT
-  - o3 FLOAT
-  - aqi INT
-  - aqi_category TEXT
-  - hour_of_day INT
-  - day_of_week INT
-  - rolling_avg_pm25_7d FLOAT
-  - pm2_5_norm FLOAT
-  - pm10_norm FLOAT
-  - no2_norm FLOAT
-  - processed_at TIMESTAMP DEFAULT NOW()
+processed_sensor_data
+  - Written by Airflow ETL after transformation
+  - Source for ML training
 
 Relationships:
-  - None enforced (ETL appends both tables independently).
+  - None enforced (ETL processes buffer independently).
 */
 
-CREATE TABLE IF NOT EXISTS raw_air_quality (
-  id SERIAL PRIMARY KEY,
-  location TEXT,
-  city TEXT,
-  country TEXT,
-  parameter TEXT,
-  value FLOAT,
-  unit TEXT,
-  date_utc TIMESTAMP,
-  latitude FLOAT,
-  longitude FLOAT,
-  source TEXT,
-  ingested_at TIMESTAMP DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS raw_sensor_buffer (
+  id           SERIAL PRIMARY KEY,
+  zone_id      TEXT NOT NULL,
+  zone_name    TEXT NOT NULL,
+  temperature  FLOAT,
+  humidity     FLOAT,
+  co2          FLOAT,
+  occupancy    INT,
+  energy_kw    FLOAT,
+  published_at TIMESTAMPTZ,
+  ingested_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS processed_air_quality (
-  id SERIAL PRIMARY KEY,
-  date TIMESTAMP,
-  city TEXT,
-  pm2_5 FLOAT,
-  pm10 FLOAT,
-  no2 FLOAT,
-  so2 FLOAT,
-  co FLOAT,
-  o3 FLOAT,
-  aqi INT,
-  aqi_category TEXT,
-  hour_of_day INT,
-  day_of_week INT,
-  rolling_avg_pm25_7d FLOAT,
-  pm2_5_norm FLOAT,
-  pm10_norm FLOAT,
-  no2_norm FLOAT,
-  processed_at TIMESTAMP DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS processed_sensor_data (
+  id                    SERIAL PRIMARY KEY,
+  zone_id               TEXT NOT NULL,
+  zone_name             TEXT NOT NULL,
+  temperature           FLOAT,
+  humidity              FLOAT,
+  co2                   FLOAT,
+  occupancy             INT,
+  energy_kw             FLOAT,
+  hour_of_day           INT,
+  day_of_week           INT,
+  is_business_hours     BOOLEAN,
+  rolling_avg_energy_7d FLOAT,
+  temperature_norm      FLOAT,
+  humidity_norm         FLOAT,
+  co2_norm              FLOAT,
+  processed_at          TIMESTAMPTZ DEFAULT NOW()
 );
